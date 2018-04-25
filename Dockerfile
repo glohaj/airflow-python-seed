@@ -1,3 +1,3 @@
-FROM davideberdin/docker-airflow:0.0.23
+FROM kubernetesgoprime/airflow:latest
 
 COPY dags/ /usr/local/dags/
