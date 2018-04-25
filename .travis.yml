@@ -1,0 +1,35 @@
+language: python
+sudo: required
+python:
+  - "2.7"
+services:
+  - docker
+env:
+  global:
+    - DOCKER_IMAGE_NAME="airflow"
+    - K8S_DEPLOYMENT_NAME_WEB_SERVER="airflow-webserver"
+    - K8S_DEPLOYMENT_NAME_SCHEDULER="airflow-scheduler"
+    - K8S_DEPLOYMENT_NAME_FLOWER="airflow-flower"
+    - K8S_DEPLOYMENT_NAME_WORKER="airflow-worker"
+    - K8S_DEPLOYMENT_NAMESPACE="airflow-prod"
+before_install:
+install:
+    - pip install -r requirements.txt
+before_script:
+    - docker login -u "${DOCKER_USERNAME}" -p "${DOCKER_PASSWORD}"
+    - docker pull smesch/kubectl
+after_script:
+    - docker build -t ${DOCKER_USERNAME}/${DOCKER_IMAGE_NAME}:${TRAVIS_BUILD_ID} .
+    - docker push ${DOCKER_USERNAME}/${DOCKER_IMAGE_NAME}:${TRAVIS_BUILD_ID}
+    - docker tag ${DOCKER_USERNAME}/${DOCKER_IMAGE_NAME}:${TRAVIS_BUILD_ID} ${DOCKER_USERNAME}/${DOCKER_IMAGE_NAME}:latest
+    - docker push ${DOCKER_USERNAME}/${DOCKER_IMAGE_NAME}:latest
+    - sed -i -e 's|KUBE_ENDPOINT|'"${KUBE_ENDPOINT}"'|g' kubeconfig
+    - sed -i -e 's|KUBE_TOKEN|'"${KUBE_TOKEN}"'|g' kubeconfig
+    - docker run -v ${TRAVIS_BUILD_DIR}:/kube smesch/kubectl kubectl --kubeconfig /kube/kubeconfig --namespace=${K8S_DEPLOYMENT_NAMESPACE} set image deployment/${K8S_DEPLOYMENT_NAME_WEB_SERVER} ${K8S_DEPLOYMENT_NAME_WEB_SERVER}=${DOCKER_USERNAME}/${DOCKER_IMAGE_NAME}:$TRAVIS_BUILD_ID
+    - docker run -v ${TRAVIS_BUILD_DIR}:/kube smesch/kubectl kubectl --kubeconfig /kube/kubeconfig --namespace=${K8S_DEPLOYMENT_NAMESPACE} set image deployment/${K8S_DEPLOYMENT_NAME_SCHEDULER} ${K8S_DEPLOYMENT_NAME_SCHEDULER}=${DOCKER_USERNAME}/${DOCKER_IMAGE_NAME}:$TRAVIS_BUILD_ID
+    - docker run -v ${TRAVIS_BUILD_DIR}:/kube smesch/kubectl kubectl --kubeconfig /kube/kubeconfig --namespace=${K8S_DEPLOYMENT_NAMESPACE} set image deployment/${K8S_DEPLOYMENT_NAME_FLOWER} ${K8S_DEPLOYMENT_NAME_FLOWER}=${DOCKER_USERNAME}/${DOCKER_IMAGE_NAME}:$TRAVIS_BUILD_ID
+    - docker run -v ${TRAVIS_BUILD_DIR}:/kube smesch/kubectl kubectl --kubeconfig /kube/kubeconfig --namespace=${K8S_DEPLOYMENT_NAMESPACE} set image deployment/${K8S_DEPLOYMENT_NAME_WORKER} ${K8S_DEPLOYMENT_NAME_WORKER}=${DOCKER_USERNAME}/${DOCKER_IMAGE_NAME}:$TRAVIS_BUILD_ID
+branches:
+  only:
+    - master
+    - development
